@@ -12,20 +12,30 @@ type BodyQual = "tight" | "open" | "numb" | "heat" | "neutral";
 
 type DailyDisturbance = "thoughts" | "people" | "phone" | "pressure" | "body_fatigue" | "unclear";
 type DailyTiming = "today" | "most_days";
-type Goal = "ease" | "focus" | "calm" | "discipline" | "peace" | "fairness" | "respect" | "safety" | "clarity" | "unknown";
+
+type Goal =
+  | "ease"
+  | "focus"
+  | "calm"
+  | "discipline"
+  | "peace"
+  | "fairness"
+  | "respect"
+  | "safety"
+  | "clarity"
+  | "unknown";
 
 type Pattern = "triangle" | "boundary" | "fair_share" | "truth_distortion" | "proportion_overload" | "unclear";
 
 type Step =
   | "none"
-  | "def_done"
   // daily
   | "daily_timing"
   | "daily_disturbance"
   | "daily_body_loc"
   | "daily_body_qual"
   | "daily_goal"
-  | "daily_resolve"
+  | "daily_done"
   // relationship
   | "rel_time"
   | "rel_role"
@@ -33,7 +43,7 @@ type Step =
   | "rel_body_qual"
   | "rel_goal"
   | "rel_repeating"
-  | "rel_resolve";
+  | "rel_done";
 
 type Session = {
   flow: Flow;
@@ -50,39 +60,47 @@ type Session = {
   dailyDisturbance?: DailyDisturbance;
 
   // relationship
-  relTime?: "today_breakfast" | "today_lunch" | "today_dinner" | "today_phone" | "yesterday" | "this_week" | "other";
+  relTime?: "today_breakfast" | "today_phone" | "yesterday" | "this_week" | "other";
   relRole?: "involved" | "witness" | "asked_to_fix" | "unclear";
   relRepeating?: "one_time" | "repeating" | "unclear";
-
-  // relationship classification
   relPattern?: Pattern;
 };
 
 const CANON = {
   appDefinition:
-    "Way of the Feather is a plain-language clarity app. You ask a real-life question, it asks a few focused follow-ups, then it helps you see a balanced next step (without telling you what to do).",
-  overlay: {
-    Sesh: "Knowns: what’s solid and specific (facts, events, signals).",
-    Shef: "Missing/Unclear: what’s needed before we can answer cleanly.",
-    Seef: "Emerging pattern: a testable insight, not a final claim.",
-    Hrp: "Resolution: a Ma’at-calibrated view (truth, fair-share, right-size).",
-    Shms: "Action: the smallest move (under 15 minutes).",
-  },
-  terms: {
-    "Ma’at":
-      "Ordering intelligence: truth, fair-share, and right-size in real life. Alignment is often detectable by steadier body signals and cleaner consequences.",
-    Isfet:
-      "Drift/distortion/incoherence. An alarm signal, not moral failure. Common signals: lurch, grind, static, numb, compulsion, rage spiral, avoidance fog.",
-    Netjer: "The unchanging background-awareness. Not a person. Not your mind.",
-    Ka: "The witness-channel: how experience registers without spin. Trainable.",
-    Khat: "The physical body. It senses and ends at physical death.",
-  },
+    "Way of the Feather is a plain-language clarity app. You ask a real-life question, it asks a few focused follow-ups, then it shows balanced options (without telling you what to do).",
   guardrailsShort:
-    "Beta note: I won’t give commands, I won’t fake certainty, and I’ll say “I don’t know” when information is missing.",
+    "Note: This app doesn’t give commands, doesn’t pretend certainty, and will say “I don’t know” if there isn’t enough to answer cleanly.",
+  terms: {
+    "Ma’at": "Balance in real life: truth, fair-share, and right-size.",
+    Isfet: "Drift/chaos signal (not moral failure): escalation, numbness, looping, pressure fog.",
+    Netjer: "Unchanging background-awareness (not a person, not your mind).",
+    Ka: "Witness-channel; trainable clarity.",
+    Khat: "The physical body.",
+    Sesh: "Knowns (facts + signals).",
+    Shef: "Missing/unclear pieces.",
+    Seef: "Emerging pattern (testable).",
+    Hrp: "Balanced direction.",
+    Shms: "Small action.",
+  } as Record<string, string>,
 };
 
 function normalize(s: string) {
   return s.trim().toLowerCase();
+}
+
+function looksLikeNewQuestion(text: string) {
+  const s = normalize(text);
+  return (
+    s.endsWith("?") ||
+    s.startsWith("how ") ||
+    s.startsWith("what ") ||
+    s.startsWith("why ") ||
+    s.startsWith("when ") ||
+    s.startsWith("where ") ||
+    s.startsWith("can ") ||
+    s.startsWith("should ")
+  );
 }
 
 function looksLikeDefinitionQuestion(q: string) {
@@ -93,41 +111,21 @@ function looksLikeDefinitionQuestion(q: string) {
     s.startsWith("what’s") ||
     s.startsWith("define") ||
     s.startsWith("explain") ||
-    s.startsWith("how does") ||
     s.includes("what is this app") ||
     s.includes("what is feather app") ||
     s.includes("way of the feather") ||
-    s.includes("what is maat") ||
-    s.includes("what is ma'at") ||
-    s.includes("what is isfet") ||
-    s.includes("what is netjer") ||
-    s.includes("what is ka") ||
-    s.includes("what is khat") ||
-    s.includes("what is sesh") ||
-    s.includes("what is shef") ||
-    s.includes("what is seef") ||
-    s.includes("what is hrp") ||
-    s.includes("what is shms")
+    Object.keys(CANON.terms).some((k) => s.includes(k.toLowerCase()))
   );
 }
 
 function answerDefinition(q: string) {
   const s = normalize(q);
-
   if (s.includes("feather app") || s.includes("this app") || s.includes("way of the feather")) {
     return CANON.appDefinition;
   }
-
-  // overlay
-  for (const k of Object.keys(CANON.overlay)) {
-    if (s.includes(k.toLowerCase())) return `${k}: ${(CANON.overlay as any)[k]}`;
-  }
-
-  // terms
   for (const k of Object.keys(CANON.terms)) {
-    if (s.includes(k.toLowerCase())) return `${k}: ${(CANON.terms as any)[k]}`;
+    if (s.includes(k.toLowerCase())) return `${k}: ${CANON.terms[k]}`;
   }
-
   return CANON.appDefinition;
 }
 
@@ -161,13 +159,13 @@ function isDailyRoutineQuestion(q: string) {
   return (
     s.includes("start my day") ||
     s.includes("morning") ||
-    s.includes("unbothered") ||
-    s.includes("with ease") ||
+    s.includes("wake up") ||
+    s.includes("waking") ||
     s.includes("daily") ||
     s.includes("most days") ||
     s.includes("routine") ||
-    s.includes("wake up") ||
-    s.includes("waking")
+    s.includes("unbothered") ||
+    s.includes("with ease")
   );
 }
 
@@ -200,116 +198,149 @@ function classifyRelationshipPattern(q: string): Pattern {
   return "unclear";
 }
 
-function prettyGoal(g: Goal | undefined) {
-  if (!g || g === "unknown") return "unknown";
-  return g.replaceAll("_", " ");
-}
+type OptionBlock = {
+  label: "A" | "B" | "C";
+  title: string;
+  steps: string[];
+  cost: string;
+  why: string;
+};
 
-function buildDailyResolve(s: Session) {
-  const sesh = [
-    `- Question: ${s.originalQuestion}`,
-    s.dailyTiming ? `- Timing: ${s.dailyTiming === "today" ? "today" : "most days"}` : null,
-    s.dailyDisturbance ? `- Main disturbance: ${s.dailyDisturbance.replaceAll("_", " ")}` : null,
-    s.bodyLoc ? `- Body: ${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : null,
-    s.goal ? `- Goal: ${prettyGoal(s.goal)}` : null,
-  ].filter(Boolean) as string[];
+function formatOptions(bestLabel: "A" | "B" | "C", mirrorLine: string, options: OptionBlock[], microAction: string) {
+  const blocks = options
+    .map((o) => {
+      return (
+        `${o.label}) ${o.title}\n` +
+        `- Steps: ${o.steps.join(" → ")}\n` +
+        `- Cost: ${o.cost}\n`
+      );
+    })
+    .join("\n");
 
-  // Seef (testable) based on disturbance
-  let seef = "One possible pattern is: a small morning mismatch between load and capacity (proportion).";
-  if (s.dailyDisturbance === "phone") seef = "One possible pattern is: early phone input hijacks attention (proportion + timing).";
-  if (s.dailyDisturbance === "thoughts") seef = "One possible pattern is: thoughts start running before the body is steady (timing + truth).";
-  if (s.dailyDisturbance === "people") seef = "One possible pattern is: other people’s demands arrive before your own line is set (fair-share + boundary).";
-  if (s.dailyDisturbance === "pressure") seef = "One possible pattern is: urgency creates tight focus and removes choice (right-size needed).";
-  if (s.dailyDisturbance === "body_fatigue") seef = "One possible pattern is: body energy is low, but the plan assumes high output (proportion).";
-
-  const hrp =
-    "- Truth: name the morning in one clean sentence (no drama).\n" +
-    "- Fair-share: what belongs to you first, before others?\n" +
-    "- Right-size: one tiny move that makes today steadier.";
-
-  // Shms options (no commands)
-  const shms =
-    "Shms (pick one, <15 min):\n" +
-    "A) 2-minute body reset, then write ONE line: “Today I will do ____.”\n" +
-    "B) Phone gate: delay phone for 10 minutes; do water + wash + one breath cycle.\n" +
-    "C) Small start: do 5 minutes on the easiest first step, then stop.\n" +
-    "D) Boundary line: one sentence to others: “I’ll reply after I settle my morning.”";
+  const best = options.find((o) => o.label === bestLabel)!;
 
   return (
-    `Sesh (knowns):\n${sesh.join("\n")}\n\n` +
-    `Shef (missing/unclear):\n- None needed to offer a small next step.\n\n` +
-    `Seef (pattern — test, not verdict):\n- ${seef}\n\n` +
-    `Hrp (Ma’at direction):\n${hrp}\n\n` +
-    `${shms}\n\n` +
-    `Feather point: choose the option that makes your ${s.bodyLoc ?? "body"} feel steadier, and keeps the step right-sized.\n\n` +
+    `${mirrorLine}\n\n` +
+    `Here are 3 balanced options (you choose):\n\n` +
+    `${blocks}\n` +
+    `Why option ${bestLabel} is usually most balanced:\n- ${best.why}\n\n` +
+    `Tiny move (<15 min): ${microAction}\n\n` +
     CANON.guardrailsShort
   );
 }
 
-function buildRelationshipResolve(s: Session) {
-  const sesh = [
-    `- Question: ${s.originalQuestion}`,
-    s.relTime ? `- When: ${s.relTime.replaceAll("_", " ")}` : null,
-    s.relRole ? `- Your role: ${s.relRole.replaceAll("_", " ")}` : null,
-    s.bodyLoc ? `- Body: ${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : null,
-    s.goal ? `- Goal: ${prettyGoal(s.goal)}` : null,
-    s.relRepeating ? `- Pattern frequency: ${s.relRepeating.replaceAll("_", " ")}` : null,
-  ].filter(Boolean) as string[];
+// DAILY: simple mirror + 3 options
+function buildDailyAnswer(s: Session) {
+  const timing = s.dailyTiming === "today" ? "today" : "most days";
+  const dist = (s.dailyDisturbance ?? "unclear").replaceAll("_", " ");
+  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
+  const goal = (s.goal ?? "unknown").replaceAll("_", " ");
+
+  const mirror = `I’m hearing: this is about ${timing}, the main trouble is ${dist}, your body says ${body}, and you want ${goal}.`;
+
+  const A: OptionBlock = {
+    label: "A",
+    title: "Stabilize the body first (2–5 min)",
+    steps: ["2 minutes slow breath", "water / wash face", "write one line: “Today I will ____.”"],
+    cost: "Feels slow at first, but it reduces drift fast.",
+    why: "When the body is tight/heat/numb, trying to “think your way out” usually fails. Regulation restores choice.",
+  };
+
+  const B: OptionBlock = {
+    label: "B",
+    title: "Reduce input (10 min gate)",
+    steps: ["no phone for 10 minutes", "one simple physical task", "then open your day"],
+    cost: "You delay messages, but you protect attention.",
+    why: "If input hijacks attention early, balance comes from controlling the first inputs.",
+  };
+
+  const C: OptionBlock = {
+    label: "C",
+    title: "Small-start focus (5 min)",
+    steps: ["pick easiest first step", "set 5-minute timer", "stop when it ends"],
+    cost: "Not a full solution, but it breaks “stuck.”",
+    why: "When pressure/thoughts are loud, one small action restores proportion and reduces fear fog.",
+  };
+
+  // Pick best based on what we know
+  let best: "A" | "B" | "C" = "A";
+  if (s.dailyDisturbance === "phone") best = "B";
+  if (s.dailyDisturbance === "pressure" || s.dailyDisturbance === "thoughts") best = "C";
+  if (s.bodyQual === "tight" || s.bodyQual === "heat" || s.bodyQual === "numb") best = "A";
+
+  const micro =
+    best === "A"
+      ? "Do 6 slow breaths, then write ONE sentence: “Today I will ____.”"
+      : best === "B"
+      ? "Put the phone away for 10 minutes and do one tiny physical reset."
+      : "Set a 5-minute timer and do the easiest first step only.";
+
+  return formatOptions(best, mirror, [A, B, C], micro);
+}
+
+// RELATIONSHIPS: mirror + drift cost + 3 options
+function buildRelationshipAnswer(s: Session) {
+  const when = s.relTime ? s.relTime.replaceAll("_", " ") : "unknown time";
+  const role = s.relRole ? s.relRole.replaceAll("_", " ") : "unclear role";
+  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
+  const goal = (s.goal ?? "unknown").replaceAll("_", " ");
+  const rep = s.relRepeating ? s.relRepeating.replaceAll("_", " ") : "unclear";
+
+  const mirror = `I’m hearing: this happened ${when}, your role is ${role}, your body says ${body}, you want ${goal}, and it’s ${rep}.`;
 
   const p = s.relPattern ?? "unclear";
-  const pLabel =
+  const drift =
     p === "triangle"
-      ? "Triangle pressure"
+      ? "If nothing changes, you get pulled into the middle again. Short calm, repeat fight."
       : p === "boundary"
-      ? "Boundary breach"
+      ? "If nothing changes, lines stay blurred. Heat rises or you shut down."
       : p === "fair_share"
-      ? "Fair-share imbalance"
+      ? "If nothing changes, you carry too much. Resentment grows."
       : p === "truth_distortion"
-      ? "Truth distortion"
+      ? "If nothing changes, facts stay fuzzy. Repair becomes harder."
       : p === "proportion_overload"
-      ? "Proportion overload"
-      : "Unclear pattern";
+      ? "If nothing changes, talks happen while flooded and escalate."
+      : "If nothing changes, confusion repeats.";
 
-  const isfet =
-    p === "triangle"
-      ? "If nothing changes, you get pulled into the middle again. Short calm, then repeat conflict. Resentment builds."
-      : p === "boundary"
-      ? "If nothing changes, lines stay blurred. People push harder or you shut down. Heat rises over time."
-      : p === "fair_share"
-      ? "If nothing changes, you carry more than your share. Depletion grows, then anger or numbness later."
-      : p === "truth_distortion"
-      ? "If nothing changes, reality gets fuzzy. Self-trust drops, and repair becomes harder."
-      : p === "proportion_overload"
-      ? "If nothing changes, bodies stay flooded. Talks become explosions or shutdown."
-      : "If nothing changes, the same confusion repeats because the missing piece stays missing.";
+  const A: OptionBlock = {
+    label: "A",
+    title: "Step in and manage it now",
+    steps: ["mediate", "calm both sides", "try to solve"],
+    cost: "Short calm, but you may become the permanent buffer.",
+    why: "This often increases dependence on you and repeats the same cycle.",
+  };
 
-  const hrp =
-    "- Truth: name what happened in one clean sentence (no mind-reading).\n" +
-    "- Fair-share: return responsibility to the right person (don’t carry two adults).\n" +
-    "- Right-size: smallest move that lowers heat today.";
+  const B: OptionBlock = {
+    label: "B",
+    title: "Step out of the middle (boundary + timing)",
+    steps: ["no sides", "pause talk while heated", "offer calm talk later"],
+    cost: "Uncomfortable now. Someone may be annoyed.",
+    why: "This returns responsibility to the right people and reduces repeat cycles over time.",
+  };
 
-  const options =
-    "Options with costs:\n" +
-    "A) Jump in and manage them\n- Cost: you become the buffer.\n- Likely result: short calm, repeat pattern.\n\n" +
-    "B) Step out of the triangle/pattern\n- Cost: discomfort now.\n- Likely result: responsibility returns; heat reduces over time.\n\n" +
-    "C) One timed truth (after calm)\n- Cost: courage + timing.\n- Likely result: clarity increases; repair becomes possible.";
+  const C: OptionBlock = {
+    label: "C",
+    title: "One clean truth later (timed, neutral)",
+    steps: ["wait until calm", "say one neutral sentence", "make one small request"],
+    cost: "Requires courage and timing.",
+    why: "This increases clarity without escalation and prevents reality-drift.",
+  };
 
-  const shms =
-    "Shms (pick one, <15 min):\n" +
-    "A) Write one calm boundary sentence you can repeat (no blame).\n" +
-    "B) Timing rule: no serious talk while bodies are tight/heat is high.\n" +
-    "C) Send one neutral line that lowers heat (not a solution).";
+  // Best pick rules
+  let best: "A" | "B" | "C" = "B";
+  if (p === "truth_distortion") best = "C";
+  if (p === "proportion_overload") best = "B";
+  if (p === "triangle") best = "B";
 
-  return (
-    `Sesh (knowns):\n${sesh.join("\n")}\n\n` +
-    `Seef (pattern — test, not verdict):\n- ${pLabel}\n\n` +
-    `Isfet track (likely cost if unchanged):\n- ${isfet}\n\n` +
-    `Hrp (Ma’at direction):\n${hrp}\n\n` +
-    `${options}\n\n` +
-    `${shms}\n\n` +
-    `Feather point: the Ma’at-leaning path usually reduces triangle pressure, increases truth, returns responsibility, and stays right-sized for today.\n\n` +
-    CANON.guardrailsShort
-  );
+  const micro =
+    best === "B"
+      ? "Write one calm boundary sentence you can repeat (no blame)."
+      : "Write one neutral truth sentence you can say later (no mind-reading).";
+
+  // Add drift line without showing “internal model”
+  const top = `${mirror}\n\nIf nothing changes, the likely cost is:\n- ${drift}`;
+
+  return formatOptions(best, top, [A, B, C], micro);
 }
 
 type Choice = { id: string; label: string; onPick: () => void };
@@ -344,7 +375,7 @@ export default function Home() {
       role: "app",
       text:
         "Welcome. Ask a real-life question, or ask “what is…” about a Feather term. " +
-        "I won’t tell you what to do — I’ll help you see a balanced next step.",
+        "I won’t tell you what to do — I’ll show balanced options.",
     },
   ]);
 
@@ -365,13 +396,13 @@ export default function Home() {
   }
 
   function beginSession(q: string) {
-    // Definitions answer immediately
+    // Definitions
     if (looksLikeDefinitionQuestion(q)) {
-      push("app", answerDefinition(q) + "\n\n" + CANON.guardrailsShort);
+      push("app", answerDefinition(q));
       return;
     }
 
-    // Relationship gets its own flow
+    // Relationships
     if (isRelationshipQuestion(q)) {
       const pat = classifyRelationshipPattern(q);
       setSession({
@@ -387,9 +418,8 @@ export default function Home() {
       return;
     }
 
-    // Daily routine questions: guided daily flow
-    if (isDailyRoutineQuestion(q) || true) {
-      // Default to daily for beta stability (works for most)
+    // Daily routine questions
+    if (isDailyRoutineQuestion(q)) {
       setSession({
         flow: "daily",
         step: "daily_timing",
@@ -400,6 +430,16 @@ export default function Home() {
       push("app", "Is this about today, or most days?");
       return;
     }
+
+    // Default fallback: treat as daily-style (safe + useful)
+    setSession({
+      flow: "daily",
+      step: "daily_timing",
+      originalQuestion: q,
+      goal: "unknown",
+      dailyDisturbance: "unclear",
+    });
+    push("app", "Is this about today, or most days?");
   }
 
   function send() {
@@ -409,16 +449,25 @@ export default function Home() {
     push("user", text);
     setInput("");
 
+    // If mid-flow and user typed a NEW question, restart clean.
+    if (session.flow !== "none" && looksLikeNewQuestion(text)) {
+      push("app", "New question noticed. Starting fresh.");
+      resetSession();
+      beginSession(text);
+      return;
+    }
+
+    // Start new session
     if (session.flow === "none") {
       beginSession(text);
       return;
     }
 
-    // If user types during a button-step, we treat it as “extra detail”
-    push("app", "Got it. (Extra detail noted.) Use the buttons below to continue.");
+    // Otherwise: treat as optional detail; buttons drive the flow.
+    push("app", "Got it. (Detail noted.) Use the buttons below to continue.");
   }
 
-  // Build button choices based on step
+  // Button choices based on step
   let choices: Choice[] = [];
 
   // DAILY FLOW
@@ -496,7 +545,7 @@ export default function Home() {
           label: "Chest",
           onPick: () => {
             setSession((s) => ({ ...s, bodyLoc: "chest", step: "daily_body_qual" }));
-            push("app", "And what’s the main body signal?");
+            push("app", "Main body signal?");
           },
         },
         {
@@ -504,7 +553,7 @@ export default function Home() {
           label: "Belly / solar plexus",
           onPick: () => {
             setSession((s) => ({ ...s, bodyLoc: "belly", step: "daily_body_qual" }));
-            push("app", "And what’s the main body signal?");
+            push("app", "Main body signal?");
           },
         },
       ];
@@ -512,91 +561,27 @@ export default function Home() {
 
     if (session.step === "daily_body_qual") {
       choices = [
-        {
-          id: "tight",
-          label: "Tight",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "tight", step: "daily_goal" }));
-            push("app", "What do you want most for your day-start?");
-          },
-        },
-        {
-          id: "open",
-          label: "Open",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "open", step: "daily_goal" }));
-            push("app", "What do you want most for your day-start?");
-          },
-        },
-        {
-          id: "numb",
-          label: "Numb",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "numb", step: "daily_goal" }));
-            push("app", "What do you want most for your day-start?");
-          },
-        },
-        {
-          id: "heat",
-          label: "Heat",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "heat", step: "daily_goal" }));
-            push("app", "What do you want most for your day-start?");
-          },
-        },
-        {
-          id: "neutral",
-          label: "Neutral",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "neutral", step: "daily_goal" }));
-            push("app", "What do you want most for your day-start?");
-          },
-        },
+        { id: "tight", label: "Tight", onPick: () => (setSession((s) => ({ ...s, bodyQual: "tight", step: "daily_goal" })), push("app", "What do you want most?")) },
+        { id: "open", label: "Open", onPick: () => (setSession((s) => ({ ...s, bodyQual: "open", step: "daily_goal" })), push("app", "What do you want most?")) },
+        { id: "numb", label: "Numb", onPick: () => (setSession((s) => ({ ...s, bodyQual: "numb", step: "daily_goal" })), push("app", "What do you want most?")) },
+        { id: "heat", label: "Heat", onPick: () => (setSession((s) => ({ ...s, bodyQual: "heat", step: "daily_goal" })), push("app", "What do you want most?")) },
+        { id: "neutral", label: "Neutral", onPick: () => (setSession((s) => ({ ...s, bodyQual: "neutral", step: "daily_goal" })), push("app", "What do you want most?")) },
       ];
     }
 
     if (session.step === "daily_goal") {
+      const setGoalAndResolve = (g: Goal) => {
+        const updated: Session = { ...session, goal: g, step: "daily_done", flow: "daily" };
+        setSession(updated);
+        push("app", buildDailyAnswer(updated));
+        resetSession();
+      };
+
       choices = [
-        {
-          id: "ease",
-          label: "Ease",
-          onPick: () => {
-            const updated = { ...session, goal: "ease", step: "daily_resolve" as Step };
-            setSession(updated);
-            push("app", buildDailyResolve(updated));
-            resetSession();
-          },
-        },
-        {
-          id: "focus",
-          label: "Focus",
-          onPick: () => {
-            const updated = { ...session, goal: "focus", step: "daily_resolve" as Step };
-            setSession(updated);
-            push("app", buildDailyResolve(updated));
-            resetSession();
-          },
-        },
-        {
-          id: "calm",
-          label: "Calm",
-          onPick: () => {
-            const updated = { ...session, goal: "calm", step: "daily_resolve" as Step };
-            setSession(updated);
-            push("app", buildDailyResolve(updated));
-            resetSession();
-          },
-        },
-        {
-          id: "discipline",
-          label: "Discipline",
-          onPick: () => {
-            const updated = { ...session, goal: "discipline", step: "daily_resolve" as Step };
-            setSession(updated);
-            push("app", buildDailyResolve(updated));
-            resetSession();
-          },
-        },
+        { id: "ease", label: "Ease", onPick: () => setGoalAndResolve("ease") },
+        { id: "focus", label: "Focus", onPick: () => setGoalAndResolve("focus") },
+        { id: "calm", label: "Calm", onPick: () => setGoalAndResolve("calm") },
+        { id: "discipline", label: "Discipline", onPick: () => setGoalAndResolve("discipline") },
       ];
     }
   }
@@ -650,184 +635,52 @@ export default function Home() {
 
     if (session.step === "rel_role") {
       choices = [
-        {
-          id: "witness",
-          label: "I witnessed it",
-          onPick: () => {
-            setSession((s) => ({ ...s, relRole: "witness", step: "rel_body_loc" }));
-            push("app", "Quick body check: where do you feel it most?");
-          },
-        },
-        {
-          id: "involved",
-          label: "I was involved",
-          onPick: () => {
-            setSession((s) => ({ ...s, relRole: "involved", step: "rel_body_loc" }));
-            push("app", "Quick body check: where do you feel it most?");
-          },
-        },
-        {
-          id: "fix",
-          label: "They want me to fix it",
-          onPick: () => {
-            setSession((s) => ({ ...s, relRole: "asked_to_fix", step: "rel_body_loc" }));
-            push("app", "Quick body check: where do you feel it most?");
-          },
-        },
-        {
-          id: "unclear",
-          label: "Not sure",
-          onPick: () => {
-            setSession((s) => ({ ...s, relRole: "unclear", step: "rel_body_loc" }));
-            push("app", "Quick body check: where do you feel it most?");
-          },
-        },
+        { id: "witness", label: "I witnessed it", onPick: () => (setSession((s) => ({ ...s, relRole: "witness", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "involved", label: "I was involved", onPick: () => (setSession((s) => ({ ...s, relRole: "involved", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "fix", label: "They want me to fix it", onPick: () => (setSession((s) => ({ ...s, relRole: "asked_to_fix", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "unclear", label: "Not sure", onPick: () => (setSession((s) => ({ ...s, relRole: "unclear", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
       ];
     }
 
     if (session.step === "rel_body_loc") {
       choices = [
-        {
-          id: "chest",
-          label: "Chest",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyLoc: "chest", step: "rel_body_qual" }));
-            push("app", "And the main body signal?");
-          },
-        },
-        {
-          id: "belly",
-          label: "Belly / solar plexus",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyLoc: "belly", step: "rel_body_qual" }));
-            push("app", "And the main body signal?");
-          },
-        },
+        { id: "chest", label: "Chest", onPick: () => (setSession((s) => ({ ...s, bodyLoc: "chest", step: "rel_body_qual" })), push("app", "Main body signal?")) },
+        { id: "belly", label: "Belly / solar plexus", onPick: () => (setSession((s) => ({ ...s, bodyLoc: "belly", step: "rel_body_qual" })), push("app", "Main body signal?")) },
       ];
     }
 
     if (session.step === "rel_body_qual") {
       choices = [
-        {
-          id: "tight",
-          label: "Tight",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "tight", step: "rel_goal" }));
-            push("app", "What do you want most right now?");
-          },
-        },
-        {
-          id: "open",
-          label: "Open",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "open", step: "rel_goal" }));
-            push("app", "What do you want most right now?");
-          },
-        },
-        {
-          id: "numb",
-          label: "Numb",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "numb", step: "rel_goal" }));
-            push("app", "What do you want most right now?");
-          },
-        },
-        {
-          id: "heat",
-          label: "Heat",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "heat", step: "rel_goal" }));
-            push("app", "What do you want most right now?");
-          },
-        },
-        {
-          id: "neutral",
-          label: "Neutral",
-          onPick: () => {
-            setSession((s) => ({ ...s, bodyQual: "neutral", step: "rel_goal" }));
-            push("app", "What do you want most right now?");
-          },
-        },
+        { id: "tight", label: "Tight", onPick: () => (setSession((s) => ({ ...s, bodyQual: "tight", step: "rel_goal" })), push("app", "What do you want most right now?")) },
+        { id: "open", label: "Open", onPick: () => (setSession((s) => ({ ...s, bodyQual: "open", step: "rel_goal" })), push("app", "What do you want most right now?")) },
+        { id: "numb", label: "Numb", onPick: () => (setSession((s) => ({ ...s, bodyQual: "numb", step: "rel_goal" })), push("app", "What do you want most right now?")) },
+        { id: "heat", label: "Heat", onPick: () => (setSession((s) => ({ ...s, bodyQual: "heat", step: "rel_goal" })), push("app", "What do you want most right now?")) },
+        { id: "neutral", label: "Neutral", onPick: () => (setSession((s) => ({ ...s, bodyQual: "neutral", step: "rel_goal" })), push("app", "What do you want most right now?")) },
       ];
     }
 
     if (session.step === "rel_goal") {
       choices = [
-        {
-          id: "peace",
-          label: "Peace",
-          onPick: () => {
-            setSession((s) => ({ ...s, goal: "peace", step: "rel_repeating" }));
-            push("app", "Is this a one-time event or repeating pattern?");
-          },
-        },
-        {
-          id: "fairness",
-          label: "Fairness",
-          onPick: () => {
-            setSession((s) => ({ ...s, goal: "fairness", step: "rel_repeating" }));
-            push("app", "Is this a one-time event or repeating pattern?");
-          },
-        },
-        {
-          id: "respect",
-          label: "Respect",
-          onPick: () => {
-            setSession((s) => ({ ...s, goal: "respect", step: "rel_repeating" }));
-            push("app", "Is this a one-time event or repeating pattern?");
-          },
-        },
-        {
-          id: "safety",
-          label: "Safety",
-          onPick: () => {
-            setSession((s) => ({ ...s, goal: "safety", step: "rel_repeating" }));
-            push("app", "Is this a one-time event or repeating pattern?");
-          },
-        },
-        {
-          id: "clarity",
-          label: "Clarity",
-          onPick: () => {
-            setSession((s) => ({ ...s, goal: "clarity", step: "rel_repeating" }));
-            push("app", "Is this a one-time event or repeating pattern?");
-          },
-        },
+        { id: "peace", label: "Peace", onPick: () => (setSession((s) => ({ ...s, goal: "peace", step: "rel_repeating" })), push("app", "Is this a one-time event or repeating pattern?")) },
+        { id: "fair", label: "Fairness", onPick: () => (setSession((s) => ({ ...s, goal: "fairness", step: "rel_repeating" })), push("app", "Is this a one-time event or repeating pattern?")) },
+        { id: "respect", label: "Respect", onPick: () => (setSession((s) => ({ ...s, goal: "respect", step: "rel_repeating" })), push("app", "Is this a one-time event or repeating pattern?")) },
+        { id: "safety", label: "Safety", onPick: () => (setSession((s) => ({ ...s, goal: "safety", step: "rel_repeating" })), push("app", "Is this a one-time event or repeating pattern?")) },
+        { id: "clarity", label: "Clarity", onPick: () => (setSession((s) => ({ ...s, goal: "clarity", step: "rel_repeating" })), push("app", "Is this a one-time event or repeating pattern?")) },
       ];
     }
 
     if (session.step === "rel_repeating") {
+      const resolve = (r: "one_time" | "repeating" | "unclear") => {
+        const updated: Session = { ...session, relRepeating: r, step: "rel_done", flow: "relationship" };
+        setSession(updated);
+        push("app", buildRelationshipAnswer(updated));
+        resetSession();
+      };
+
       choices = [
-        {
-          id: "one",
-          label: "One-time",
-          onPick: () => {
-            const updated = { ...session, relRepeating: "one_time", step: "rel_resolve" as Step };
-            setSession(updated);
-            push("app", buildRelationshipResolve(updated));
-            resetSession();
-          },
-        },
-        {
-          id: "rep",
-          label: "Repeating",
-          onPick: () => {
-            const updated = { ...session, relRepeating: "repeating", step: "rel_resolve" as Step };
-            setSession(updated);
-            push("app", buildRelationshipResolve(updated));
-            resetSession();
-          },
-        },
-        {
-          id: "unclear",
-          label: "Not sure",
-          onPick: () => {
-            const updated = { ...session, relRepeating: "unclear", step: "rel_resolve" as Step };
-            setSession(updated);
-            push("app", buildRelationshipResolve(updated));
-            resetSession();
-          },
-        },
+        { id: "one", label: "One-time", onPick: () => resolve("one_time") },
+        { id: "rep", label: "Repeating", onPick: () => resolve("repeating") },
+        { id: "unsure", label: "Not sure", onPick: () => resolve("unclear") },
       ];
     }
   }
@@ -842,9 +695,7 @@ export default function Home() {
       }}
     >
       <h1 style={{ marginBottom: 6 }}>Way of the Feather</h1>
-      <p style={{ marginTop: 0, color: "#444" }}>
-        Plain language. Real life. Costs + balance. No commands.
-      </p>
+      <p style={{ marginTop: 0, color: "#444" }}>Plain language. Real life. Costs + balance. No commands.</p>
 
       <div
         style={{
@@ -880,7 +731,6 @@ export default function Home() {
           </div>
         ))}
 
-        {/* Button choices appear here when the session is awaiting a tap */}
         {choices.length > 0 && (
           <div style={{ marginTop: 6 }}>
             <ButtonRow choices={choices} />
@@ -892,7 +742,7 @@ export default function Home() {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder='Type your question, then tap Send. Example: “How can I start my day with ease?”'
+          placeholder='Type your question, tap Send, then use the buttons. Example: “How can I start my day with ease?”'
           rows={3}
           style={{
             flex: 1,
@@ -920,7 +770,7 @@ export default function Home() {
       </div>
 
       <div style={{ marginTop: 10, fontSize: 12, color: "#666" }}>
-        Tip: After you tap Send, use the buttons to answer. You can still type extra details, but buttons keep it clean.
+        Tip: After you tap Send, answer with the buttons. If you type a new question mid-flow, it starts fresh.
       </div>
     </main>
   );
