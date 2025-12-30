@@ -5,12 +5,26 @@ import { useMemo, useState } from "react";
 type Role = "user" | "app";
 type Msg = { role: Role; text: string };
 
-type Flow = "none" | "definition" | "daily" | "relationship" | "work" | "money" | "health";
+type Flow =
+  | "none"
+  | "definition"
+  | "daily"
+  | "relationship"
+  | "work"
+  | "money"
+  | "health";
 
 type BodyLoc = "chest" | "belly" | "head" | "whole_body";
 type BodyQual = "tight" | "heavy" | "numb" | "heat" | "neutral";
 
-type DailyDisturbance = "thoughts" | "people" | "phone" | "pressure" | "body_fatigue" | "unclear";
+type DailyDisturbance =
+  | "thoughts"
+  | "people"
+  | "phone"
+  | "pressure"
+  | "body_fatigue"
+  | "unclear";
+
 type DailyTiming = "today" | "most_days";
 
 type Goal =
@@ -30,15 +44,46 @@ type Goal =
   | "energy"
   | "unknown";
 
-type Pattern = "triangle" | "boundary" | "fair_share" | "truth_distortion" | "proportion_overload" | "unclear";
+type CostConcern =
+  | "gets_worse"
+  | "someone_upset"
+  | "feel_stuck"
+  | "lose_respect"
+  | "not_sure";
 
-type WorkScope = "too_much" | "conflict" | "unclear_priorities" | "avoidance" | "job_direction";
+type Pattern =
+  | "triangle"
+  | "boundary"
+  | "fair_share"
+  | "truth_distortion"
+  | "proportion_overload"
+  | "unclear";
+
+type WorkScope =
+  | "too_much"
+  | "conflict"
+  | "unclear_priorities"
+  | "avoidance"
+  | "job_direction";
+
 type WorkTiming = "today" | "this_week" | "ongoing";
 
-type MoneyPressure = "not_enough_in" | "too_much_out" | "fear_uncertainty" | "avoided_decision" | "conflict_money";
+type MoneyPressure =
+  | "not_enough_in"
+  | "too_much_out"
+  | "fear_uncertainty"
+  | "avoided_decision"
+  | "conflict_money";
+
 type MoneyHorizon = "right_now" | "this_month" | "ongoing";
 
-type HealthIssue = "energy_fatigue" | "pain_discomfort" | "stress_anxiety" | "sleep" | "habit";
+type HealthIssue =
+  | "energy_fatigue"
+  | "pain_discomfort"
+  | "stress_anxiety"
+  | "sleep"
+  | "habit";
+
 type HealthPattern = "new" | "ongoing" | "comes_goes";
 
 type Step =
@@ -46,14 +91,16 @@ type Step =
   // daily
   | "daily_timing"
   | "daily_disturbance"
-  | "daily_body_loc"
+  | "daily_cost"
+  | "daily_body_optional"
   | "daily_body_qual"
   | "daily_goal"
   | "daily_done"
   // relationship
   | "rel_time"
   | "rel_role"
-  | "rel_body_loc"
+  | "rel_cost"
+  | "rel_body_optional"
   | "rel_body_qual"
   | "rel_goal"
   | "rel_repeating"
@@ -61,21 +108,24 @@ type Step =
   // work
   | "work_scope"
   | "work_timing"
-  | "work_body_loc"
+  | "work_cost"
+  | "work_body_optional"
   | "work_body_qual"
   | "work_goal"
   | "work_done"
   // money
   | "money_pressure"
   | "money_horizon"
-  | "money_body_loc"
+  | "money_cost"
+  | "money_body_optional"
   | "money_body_qual"
   | "money_goal"
   | "money_done"
   // health
   | "health_issue"
   | "health_pattern"
-  | "health_body_loc"
+  | "health_cost"
+  | "health_body_optional"
   | "health_body_qual"
   | "health_goal"
   | "health_done";
@@ -86,6 +136,7 @@ type Session = {
   originalQuestion: string;
 
   // shared
+  costConcern?: CostConcern;
   bodyLoc?: BodyLoc;
   bodyQual?: BodyQual;
   goal?: Goal;
@@ -122,7 +173,8 @@ const CANON = {
     "Health note: This is not medical advice. If symptoms are severe, sudden, worsening, or you feel unsafe, seek professional help.",
   terms: {
     "Ma’at": "Balance in real life: truth, fair-share, and right-size.",
-    Isfet: "Drift/chaos signal (not moral failure): escalation, numbness, looping, pressure fog.",
+    Isfet:
+      "Drift/chaos signal (not moral failure): escalation, numbness, looping, pressure fog.",
     Netjer: "Unchanging background-awareness (not a person, not your mind).",
     Ka: "Witness-channel; trainable clarity.",
     Khat: "The physical body.",
@@ -170,7 +222,11 @@ function looksLikeDefinitionQuestion(q: string) {
 
 function answerDefinition(q: string) {
   const s = normalize(q);
-  if (s.includes("feather app") || s.includes("this app") || s.includes("way of the feather")) {
+  if (
+    s.includes("feather app") ||
+    s.includes("this app") ||
+    s.includes("way of the feather")
+  ) {
     return CANON.appDefinition;
   }
   for (const k of Object.keys(CANON.terms)) {
@@ -182,6 +238,7 @@ function answerDefinition(q: string) {
 function isRelationshipQuestion(q: string) {
   const s = normalize(q);
   const relMarkers = [
+    // family/partners/friends
     "mother",
     "mum",
     "father",
@@ -200,6 +257,19 @@ function isRelationshipQuestion(q: string) {
     "in-laws",
     "sister",
     "brother",
+    // youth-ish
+    "school",
+    "class",
+    "teacher",
+    "bully",
+    "bullying",
+    "crush",
+    "date",
+    "first date",
+    "group chat",
+    "instagram",
+    "snapchat",
+    "tiktok",
   ];
   return relMarkers.some((m) => s.includes(m));
 }
@@ -221,41 +291,128 @@ function isDailyRoutineQuestion(q: string) {
 
 function isWorkQuestion(q: string) {
   const s = normalize(q);
-  const workMarkers = ["work", "job", "boss", "project", "deadline", "office", "colleague", "coworker", "career", "meeting"];
+  const workMarkers = [
+    "work",
+    "job",
+    "boss",
+    "project",
+    "deadline",
+    "office",
+    "colleague",
+    "coworker",
+    "career",
+    "meeting",
+  ];
   return workMarkers.some((m) => s.includes(m));
 }
 
 function isMoneyQuestion(q: string) {
   const s = normalize(q);
-  const moneyMarkers = ["money", "bills", "rent", "debt", "loan", "saving", "savings", "income", "salary", "pay", "spending", "budget"];
+  const moneyMarkers = [
+    "money",
+    "bills",
+    "rent",
+    "debt",
+    "loan",
+    "saving",
+    "savings",
+    "income",
+    "salary",
+    "pay",
+    "spending",
+    "budget",
+  ];
   return moneyMarkers.some((m) => s.includes(m));
 }
 
 function isHealthQuestion(q: string) {
   const s = normalize(q);
-  const healthMarkers = ["health", "pain", "sick", "ill", "fatigue", "tired", "sleep", "anxiety", "stress", "panic", "headache", "stomach", "depressed"];
+  const healthMarkers = [
+    "health",
+    "pain",
+    "sick",
+    "ill",
+    "fatigue",
+    "tired",
+    "sleep",
+    "anxiety",
+    "stress",
+    "panic",
+    "headache",
+    "stomach",
+    "depressed",
+  ];
   return healthMarkers.some((m) => s.includes(m));
 }
 
 function classifyRelationshipPattern(q: string): Pattern {
   const s = normalize(q);
 
-  const triangleMarkers = ["between", "my mother and", "my mum and", "my husband and", "my wife and", "my partner and", "my dad and", "my father and"];
+  const triangleMarkers = [
+    "between",
+    "my mother and",
+    "my mum and",
+    "my husband and",
+    "my wife and",
+    "my partner and",
+    "my dad and",
+    "my father and",
+  ];
   const hasTriangle =
     triangleMarkers.some((m) => s.includes(m)) ||
-    (s.includes("mother") && (s.includes("husband") || s.includes("wife") || s.includes("partner"))) ||
+    (s.includes("mother") &&
+      (s.includes("husband") || s.includes("wife") || s.includes("partner"))) ||
     (s.includes("parent") && s.includes("partner"));
 
-  const truthMarkers = ["denies", "gaslight", "that didn't happen", "making it up", "twist", "rewrite", "lies", "lying"];
+  const truthMarkers = [
+    "denies",
+    "gaslight",
+    "that didn't happen",
+    "making it up",
+    "twist",
+    "rewrite",
+    "lies",
+    "lying",
+  ];
   const hasTruth = truthMarkers.some((m) => s.includes(m));
 
-  const boundaryMarkers = ["boundary", "invade", "control", "disrespect", "crossed the line", "won't stop", "keeps coming", "showing up", "telling me what"];
+  const boundaryMarkers = [
+    "boundary",
+    "invade",
+    "control",
+    "disrespect",
+    "crossed the line",
+    "won't stop",
+    "keeps coming",
+    "showing up",
+    "telling me what",
+  ];
   const hasBoundary = boundaryMarkers.some((m) => s.includes(m));
 
-  const fairMarkers = ["i do everything", "always me", "i carry", "i'm tired", "exhausted", "all on me", "not fair", "unbalanced"];
+  const fairMarkers = [
+    "i do everything",
+    "always me",
+    "i carry",
+    "i'm tired",
+    "exhausted",
+    "all on me",
+    "not fair",
+    "unbalanced",
+  ];
   const hasFair = fairMarkers.some((m) => s.includes(m));
 
-  const overloadMarkers = ["too much", "overwhelmed", "flooded", "panic", "shut down", "numb", "can't think", "explode", "screaming", "yelling"];
+  const overloadMarkers = [
+    "too much",
+    "overwhelmed",
+    "flooded",
+    "panic",
+    "shut down",
+    "numb",
+    "can't think",
+    "explode",
+    "screaming",
+    "yelling",
+  ];
   const hasOverload = overloadMarkers.some((m) => s.includes(m));
 
   if (hasTriangle) return "triangle";
@@ -274,7 +431,13 @@ type OptionBlock = {
   why: string;
 };
 
-function formatOptions(header: string, bestLabel: "A" | "B" | "C", options: OptionBlock[], microAction: string, footer?: string) {
+function formatOptions(
+  header: string,
+  bestLabel: "A" | "B" | "C",
+  options: OptionBlock[],
+  microAction: string,
+  footer?: string
+) {
   const blocks = options
     .map(
       (o) =>
@@ -297,22 +460,47 @@ function formatOptions(header: string, bestLabel: "A" | "B" | "C", options: Opti
   );
 }
 
+function costText(c?: CostConcern) {
+  if (!c) return "";
+  if (c === "gets_worse") return "it gets worse";
+  if (c === "someone_upset") return "someone gets upset";
+  if (c === "feel_stuck") return "you feel stuck";
+  if (c === "lose_respect") return "you lose respect/confidence";
+  return "you’re not sure yet";
+}
+
+function bodyText(s: Session) {
+  if (!s.bodyLoc) return "";
+  const loc =
+    s.bodyLoc === "whole_body"
+      ? "whole body"
+      : s.bodyLoc === "belly"
+      ? "belly/stomach"
+      : s.bodyLoc;
+  const qual = s.bodyQual ? ` (${s.bodyQual})` : "";
+  return `${loc}${qual}`;
+}
+
 // ---------- ANSWERS (no inner model shown) ----------
 
 function buildDailyAnswer(s: Session) {
   const timing = s.dailyTiming === "today" ? "today" : "most days";
   const dist = (s.dailyDisturbance ?? "unclear").replaceAll("_", " ");
-  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
   const goal = (s.goal ?? "unknown").replaceAll("_", " ");
+  const body = bodyText(s);
+  const cost = costText(s.costConcern);
 
-  const header = `I’m hearing: this is about ${timing}, the main trouble is ${dist}, your body says ${body}, and you want ${goal}.`;
+  const header =
+    `I’m hearing: this is about ${timing}. Main trouble: ${dist}. You want ${goal}.` +
+    (cost ? `\nIf nothing changes, your worry is: ${cost}.` : "") +
+    (body ? `\nOptional body hint: ${body}.` : "");
 
   const A: OptionBlock = {
     label: "A",
-    title: "Stabilize the body first (2–5 min)",
+    title: "Stabilize first (2–5 min)",
     steps: ["6 slow breaths", "water / wash face", "write one line: “Today I will ____.”"],
     cost: "Feels slow at first, but it reduces drift fast.",
-    why: "When the body is tight/heat/numb, regulation restores choice and stops the spiral early.",
+    why: "When the start is noisy, regulation restores choice and stops the spiral early.",
   };
 
   const B: OptionBlock = {
@@ -328,7 +516,7 @@ function buildDailyAnswer(s: Session) {
     title: "Small-start focus (5 min)",
     steps: ["pick easiest first step", "set 5-minute timer", "stop when it ends"],
     cost: "Not a full solution, but it breaks “stuck.”",
-    why: "One small action restores proportion and reduces fear-fog more than thinking does.",
+    why: "One small action restores proportion and reduces fog more than thinking does.",
   };
 
   let best: "A" | "B" | "C" = "A";
@@ -349,27 +537,30 @@ function buildDailyAnswer(s: Session) {
 function buildRelationshipAnswer(s: Session) {
   const when = s.relTime ? s.relTime.replaceAll("_", " ") : "unknown time";
   const role = s.relRole ? s.relRole.replaceAll("_", " ") : "unclear role";
-  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
   const goal = (s.goal ?? "unknown").replaceAll("_", " ");
   const rep = s.relRepeating ? s.relRepeating.replaceAll("_", " ") : "unclear";
+  const body = bodyText(s);
+  const costPick = costText(s.costConcern);
 
   const p = s.relPattern ?? "unclear";
   const likelyCost =
     p === "triangle"
-      ? "If nothing changes, you get pulled into the middle again. Short calm, repeat conflict."
+      ? "You get pulled into the middle again. Short calm, repeat conflict."
       : p === "boundary"
-      ? "If nothing changes, lines stay blurred. Heat rises or you shut down."
+      ? "Lines stay blurred. Heat rises or you shut down."
       : p === "fair_share"
-      ? "If nothing changes, you carry too much. Resentment grows."
+      ? "You carry too much. Resentment grows."
       : p === "truth_distortion"
-      ? "If nothing changes, facts stay fuzzy and repair gets harder."
+      ? "Facts stay fuzzy and repair gets harder."
       : p === "proportion_overload"
-      ? "If nothing changes, talks happen while flooded and escalate."
-      : "If nothing changes, the confusion repeats.";
+      ? "Talks happen while flooded and escalate."
+      : "Confusion repeats.";
 
   const header =
-    `I’m hearing: this happened ${when}, your role is ${role}, your body says ${body}, you want ${goal}, and it’s ${rep}.\n\n` +
-    `If nothing changes, the likely cost is:\n- ${likelyCost}`;
+    `I’m hearing: this happened ${when}. Your role: ${role}. You want ${goal}. It’s ${rep}.` +
+    `\nIf nothing changes, the likely cost is: ${likelyCost}` +
+    (costPick ? `\nYour biggest worry is: ${costPick}.` : "") +
+    (body ? `\nOptional body hint: ${body}.` : "");
 
   const A: OptionBlock = {
     label: "A",
@@ -400,9 +591,10 @@ function buildRelationshipAnswer(s: Session) {
   if (p === "proportion_overload") best = "B";
   if (p === "triangle") best = "B";
 
-  const micro = best === "C"
-    ? "Write one neutral truth sentence you can say later (no mind-reading)."
-    : "Write one calm boundary sentence you can repeat (no blame).";
+  const micro =
+    best === "C"
+      ? "Write one neutral truth sentence you can say later (no mind-reading)."
+      : "Write one calm boundary sentence you can repeat (no blame).";
 
   return formatOptions(header, best, [A, B, C], micro);
 }
@@ -410,8 +602,9 @@ function buildRelationshipAnswer(s: Session) {
 function buildWorkAnswer(s: Session) {
   const scope = s.workScope ?? "too_much";
   const timing = s.workTiming ?? "today";
-  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
   const goal = (s.goal ?? "unknown").replaceAll("_", " ");
+  const body = bodyText(s);
+  const costPick = costText(s.costConcern);
 
   const scopeText =
     scope === "too_much"
@@ -425,16 +618,19 @@ function buildWorkAnswer(s: Session) {
       : "job direction / next move";
 
   const timingText = timing === "today" ? "today" : timing === "this_week" ? "this week" : "ongoing";
+
   const header =
-    `I’m hearing: this is work-related, mainly ${scopeText}, mostly about ${timingText}. Your body says ${body}. You want ${goal}.\n\n` +
-    `If nothing changes, the likely cost is pressure spreading into everything and focus shrinking.`;
+    `I’m hearing: work issue = ${scopeText}. Timing = ${timingText}. You want ${goal}.` +
+    `\nIf nothing changes, the likely cost is pressure spreading and focus shrinking.` +
+    (costPick ? `\nYour biggest worry is: ${costPick}.` : "") +
+    (body ? `\nOptional body hint: ${body}.` : "");
 
   const A: OptionBlock = {
     label: "A",
     title: "Shrink the load (one true priority)",
     steps: ["choose ONE task that matters most", "park the rest for now", "do 10 minutes on that one"],
     cost: "Some things wait.",
-    why: "When load is too wide, reducing scope restores proportion and stops mental overload.",
+    why: "When load is too wide, reducing scope restores proportion and stops overload.",
   };
 
   const B: OptionBlock = {
@@ -455,9 +651,7 @@ function buildWorkAnswer(s: Session) {
 
   let best: "A" | "B" | "C" = "A";
   if (scope === "conflict") best = "B";
-  if (scope === "unclear_priorities") best = "A";
-  if (scope === "avoidance") best = "C";
-  if (scope === "job_direction") best = "C";
+  if (scope === "avoidance" || scope === "job_direction") best = "C";
 
   const micro =
     best === "B"
@@ -472,8 +666,9 @@ function buildWorkAnswer(s: Session) {
 function buildMoneyAnswer(s: Session) {
   const pressure = s.moneyPressure ?? "fear_uncertainty";
   const horizon = s.moneyHorizon ?? "right_now";
-  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
   const goal = (s.goal ?? "unknown").replaceAll("_", " ");
+  const body = bodyText(s);
+  const costPick = costText(s.costConcern);
 
   const pressureText =
     pressure === "not_enough_in"
@@ -489,8 +684,10 @@ function buildMoneyAnswer(s: Session) {
   const horizonText = horizon === "right_now" ? "right now" : horizon === "this_month" ? "this month" : "ongoing";
 
   const header =
-    `I’m hearing: this is money pressure about ${pressureText}, mainly ${horizonText}. Your body says ${body}. You want ${goal}.\n\n` +
-    `If nothing changes, money stress usually leaks into sleep, relationships, and decision-making.`;
+    `I’m hearing: money pressure = ${pressureText}. Horizon = ${horizonText}. You want ${goal}.` +
+    `\nIf nothing changes, money stress usually leaks into sleep, relationships, and decisions.` +
+    (costPick ? `\nYour biggest worry is: ${costPick}.` : "") +
+    (body ? `\nOptional body hint: ${body}.` : "");
 
   const A: OptionBlock = {
     label: "A",
@@ -511,17 +708,14 @@ function buildMoneyAnswer(s: Session) {
   const C: OptionBlock = {
     label: "C",
     title: "One concrete improvement",
-    steps: ["one small income action", "or one bill reduction call/message", "or one plan for next pay cycle"],
+    steps: ["one small income action", "or one bill reduction message", "or one plan for next pay cycle"],
     cost: "Requires effort and follow-through.",
     why: "Movement reduces fear more than thinking does.",
   };
 
   let best: "A" | "B" | "C" = "A";
-  if (pressure === "fear_uncertainty") best = "A";
-  if (horizon === "right_now") best = "B";
+  if (horizon === "right_now" || pressure === "too_much_out") best = "B";
   if (pressure === "not_enough_in") best = "C";
-  if (pressure === "too_much_out") best = "B";
-  if (pressure === "conflict_money") best = "A";
 
   const micro =
     best === "A"
@@ -536,8 +730,9 @@ function buildMoneyAnswer(s: Session) {
 function buildHealthAnswer(s: Session) {
   const issue = s.healthIssue ?? "stress_anxiety";
   const pattern = s.healthPattern ?? "ongoing";
-  const body = s.bodyLoc ? `${s.bodyLoc}${s.bodyQual ? ` (${s.bodyQual})` : ""}` : "unknown";
   const goal = (s.goal ?? "unknown").replaceAll("_", " ");
+  const body = bodyText(s);
+  const costPick = costText(s.costConcern);
 
   const issueText =
     issue === "energy_fatigue"
@@ -553,8 +748,10 @@ function buildHealthAnswer(s: Session) {
   const patternText = pattern === "new" ? "new" : pattern === "comes_goes" ? "comes and goes" : "ongoing";
 
   const header =
-    `I’m hearing: this is about ${issueText}, it’s ${patternText}, your body says ${body}, and you want ${goal}.\n\n` +
-    `If nothing changes, the body often compensates short-term and pays later with lower energy or higher stress.`;
+    `I’m hearing: health issue = ${issueText}. Pattern = ${patternText}. You want ${goal}.` +
+    `\nIf nothing changes, the body often compensates short-term and pays later (energy/stress).` +
+    (costPick ? `\nYour biggest worry is: ${costPick}.` : "") +
+    (body ? `\nOptional body hint: ${body}.` : "");
 
   const A: OptionBlock = {
     label: "A",
@@ -581,8 +778,7 @@ function buildHealthAnswer(s: Session) {
   };
 
   let best: "A" | "B" | "C" = "B";
-  if (pattern === "new") best = "C";
-  if (issue === "pain_discomfort") best = "C";
+  if (pattern === "new" || issue === "pain_discomfort") best = "C";
   if (issue === "stress_anxiety") best = "A";
   if (issue === "sleep") best = "B";
 
@@ -623,12 +819,31 @@ function ButtonRow({ choices }: { choices: Choice[] }) {
   );
 }
 
+function inferGoalStep(flow: Flow): Step {
+  if (flow === "daily") return "daily_goal";
+  if (flow === "relationship") return "rel_goal";
+  if (flow === "work") return "work_goal";
+  if (flow === "money") return "money_goal";
+  if (flow === "health") return "health_goal";
+  return "none";
+}
+
+function nextBodyQualStep(current: Step): Step {
+  if (current === "daily_body_optional") return "daily_body_qual";
+  if (current === "rel_body_optional") return "rel_body_qual";
+  if (current === "work_body_optional") return "work_body_qual";
+  if (current === "money_body_optional") return "money_body_qual";
+  if (current === "health_body_optional") return "health_body_qual";
+  return current;
+}
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([
     {
       role: "app",
-      text: "Welcome. Ask a real-life question. I won’t tell you what to do — I’ll show balanced options.",
+      text:
+        "Welcome. Ask a real-life question. I’ll ask a few short questions to understand it (you can skip any). Then I’ll show 3 balanced options — you choose.",
     },
   ]);
 
@@ -664,6 +879,7 @@ export default function Home() {
         relRole: "unclear",
         relRepeating: "unclear",
         goal: "unknown",
+        costConcern: "not_sure",
       });
       push("app", "Quick check: when did it happen?");
       return;
@@ -675,6 +891,7 @@ export default function Home() {
         step: "work_scope",
         originalQuestion: q,
         goal: "unknown",
+        costConcern: "not_sure",
       });
       push("app", "Work check: what is this mainly about?");
       return;
@@ -686,6 +903,7 @@ export default function Home() {
         step: "money_pressure",
         originalQuestion: q,
         goal: "unknown",
+        costConcern: "not_sure",
       });
       push("app", "Money check: what’s the main pressure?");
       return;
@@ -697,6 +915,7 @@ export default function Home() {
         step: "health_issue",
         originalQuestion: q,
         goal: "unknown",
+        costConcern: "not_sure",
       });
       push("app", "Health check: what’s the main concern?");
       return;
@@ -709,6 +928,7 @@ export default function Home() {
         originalQuestion: q,
         goal: "unknown",
         dailyDisturbance: "unclear",
+        costConcern: "not_sure",
       });
       push("app", "Is this about today, or most days?");
       return;
@@ -721,6 +941,7 @@ export default function Home() {
       originalQuestion: q,
       goal: "unknown",
       dailyDisturbance: "unclear",
+      costConcern: "not_sure",
     });
     push("app", "Is this about today, or most days?");
   }
@@ -753,69 +974,125 @@ export default function Home() {
   // Build choices based on current step
   let choices: Choice[] = [];
 
-  // Shared body prompt helpers
-  const bodyLocChoices: Choice[] = [
+  const costChoices = (nextStep: Step): Choice[] => [
     {
-      id: "chest",
-      label: "Chest",
+      id: "worse",
+      label: "It gets worse",
       onPick: () => {
-        setSession((s) => ({ ...s, bodyLoc: "chest", step: nextBodyQualStep(s.step) }));
-        push("app", "Main body signal?");
+        setSession((s) => ({ ...s, costConcern: "gets_worse", step: nextStep }));
+        push("app", "Optional: do you notice anything in the body? (You can skip.)");
       },
     },
     {
-      id: "belly",
-      label: "Belly / solar plexus",
+      id: "upset",
+      label: "Someone gets upset",
       onPick: () => {
-        setSession((s) => ({ ...s, bodyLoc: "belly", step: nextBodyQualStep(s.step) }));
-        push("app", "Main body signal?");
-      },
-    },
-  ];
-
-  const healthBodyLocChoices: Choice[] = [
-    {
-      id: "head",
-      label: "Head",
-      onPick: () => {
-        setSession((s) => ({ ...s, bodyLoc: "head", step: "health_body_qual" }));
-        push("app", "Main body signal?");
+        setSession((s) => ({ ...s, costConcern: "someone_upset", step: nextStep }));
+        push("app", "Optional: do you notice anything in the body? (You can skip.)");
       },
     },
     {
-      id: "chest",
-      label: "Chest",
+      id: "stuck",
+      label: "I feel stuck",
       onPick: () => {
-        setSession((s) => ({ ...s, bodyLoc: "chest", step: "health_body_qual" }));
-        push("app", "Main body signal?");
+        setSession((s) => ({ ...s, costConcern: "feel_stuck", step: nextStep }));
+        push("app", "Optional: do you notice anything in the body? (You can skip.)");
       },
     },
     {
-      id: "belly",
-      label: "Belly",
+      id: "respect",
+      label: "I lose respect/confidence",
       onPick: () => {
-        setSession((s) => ({ ...s, bodyLoc: "belly", step: "health_body_qual" }));
-        push("app", "Main body signal?");
+        setSession((s) => ({ ...s, costConcern: "lose_respect", step: nextStep }));
+        push("app", "Optional: do you notice anything in the body? (You can skip.)");
       },
     },
     {
-      id: "whole",
-      label: "Whole body",
+      id: "ns",
+      label: "Not sure",
       onPick: () => {
-        setSession((s) => ({ ...s, bodyLoc: "whole_body", step: "health_body_qual" }));
-        push("app", "Main body signal?");
+        setSession((s) => ({ ...s, costConcern: "not_sure", step: nextStep }));
+        push("app", "Optional: do you notice anything in the body? (You can skip.)");
       },
     },
   ];
 
-  function nextBodyQualStep(current: Step): Step {
-    // map loc step -> qual step for each flow
-    if (current === "daily_body_loc") return "daily_body_qual";
-    if (current === "rel_body_loc") return "rel_body_qual";
-    if (current === "work_body_loc") return "work_body_qual";
-    if (current === "money_body_loc") return "money_body_qual";
-    return current;
-  }
+  const makeBodyLocChoices = (kind: "basic" | "health"): Choice[] => {
+    const base: Choice[] = [
+      {
+        id: "skip_body",
+        label: "I don’t notice anything",
+        onPick: () => {
+          setSession((s) => ({
+            ...s,
+            bodyLoc: undefined,
+            bodyQual: undefined,
+            step: inferGoalStep(s.flow),
+          }));
+          push("app", "No problem. What do you want most right now?");
+        },
+      },
+    ];
+
+    if (kind === "basic") {
+      return [
+        ...base,
+        {
+          id: "chest",
+          label: "Chest",
+          onPick: () => {
+            setSession((s) => ({ ...s, bodyLoc: "chest", step: nextBodyQualStep(s.step) }));
+            push("app", "If you can tell, what’s the main signal?");
+          },
+        },
+        {
+          id: "belly",
+          label: "Belly / stomach",
+          onPick: () => {
+            setSession((s) => ({ ...s, bodyLoc: "belly", step: nextBodyQualStep(s.step) }));
+            push("app", "If you can tell, what’s the main signal?");
+          },
+        },
+      ];
+    }
+
+    // health has extra locations
+    return [
+      ...base,
+      {
+        id: "head",
+        label: "Head",
+        onPick: () => {
+          setSession((s) => ({ ...s, bodyLoc: "head", step: nextBodyQualStep(s.step) }));
+          push("app", "If you can tell, what’s the main signal?");
+        },
+      },
+      {
+        id: "chest",
+        label: "Chest",
+        onPick: () => {
+          setSession((s) => ({ ...s, bodyLoc: "chest", step: nextBodyQualStep(s.step) }));
+          push("app", "If you can tell, what’s the main signal?");
+        },
+      },
+      {
+        id: "belly",
+        label: "Belly / stomach",
+        onPick: () => {
+          setSession((s) => ({ ...s, bodyLoc: "belly", step: nextBodyQualStep(s.step) }));
+          push("app", "If you can tell, what’s the main signal?");
+        },
+      },
+      {
+        id: "whole",
+        label: "Whole body",
+        onPick: () => {
+          setSession((s) => ({ ...s, bodyLoc: "whole_body", step: nextBodyQualStep(s.step) }));
+          push("app", "If you can tell, what’s the main signal?");
+        },
+      },
+    ];
+  };
 
   const bodyQualChoices = (nextStep: Step, nextQuestion: string): Choice[] => [
     {
@@ -860,7 +1137,7 @@ export default function Home() {
     },
   ];
 
-  // DAILY FLOW
+  // ---------------- DAILY FLOW ----------------
   if (session.flow === "daily") {
     if (session.step === "daily_timing") {
       choices = [
@@ -884,16 +1161,22 @@ export default function Home() {
     }
 
     if (session.step === "daily_disturbance") {
+      const goCost = (d: DailyDisturbance) => {
+        setSession((s) => ({ ...s, dailyDisturbance: d, step: "daily_cost" }));
+        push("app", "If nothing changes, what worries you most?");
+      };
+
       choices = [
-        { id: "thoughts", label: "Thoughts", onPick: () => (setSession((s) => ({ ...s, dailyDisturbance: "thoughts", step: "daily_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "people", label: "People", onPick: () => (setSession((s) => ({ ...s, dailyDisturbance: "people", step: "daily_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "phone", label: "Phone", onPick: () => (setSession((s) => ({ ...s, dailyDisturbance: "phone", step: "daily_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "pressure", label: "Pressure", onPick: () => (setSession((s) => ({ ...s, dailyDisturbance: "pressure", step: "daily_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "fatigue", label: "Body fatigue", onPick: () => (setSession((s) => ({ ...s, dailyDisturbance: "body_fatigue", step: "daily_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "thoughts", label: "Thoughts", onPick: () => goCost("thoughts") },
+        { id: "people", label: "People", onPick: () => goCost("people") },
+        { id: "phone", label: "Phone", onPick: () => goCost("phone") },
+        { id: "pressure", label: "Pressure", onPick: () => goCost("pressure") },
+        { id: "fatigue", label: "Body fatigue", onPick: () => goCost("body_fatigue") },
       ];
     }
 
-    if (session.step === "daily_body_loc") choices = bodyLocChoices;
+    if (session.step === "daily_cost") choices = costChoices("daily_body_optional");
+    if (session.step === "daily_body_optional") choices = makeBodyLocChoices("basic");
 
     if (session.step === "daily_body_qual") {
       choices = bodyQualChoices("daily_goal", "What do you want most?");
@@ -916,28 +1199,68 @@ export default function Home() {
     }
   }
 
-  // RELATIONSHIP FLOW
+  // ---------------- RELATIONSHIP FLOW ----------------
   if (session.flow === "relationship") {
     if (session.step === "rel_time") {
       choices = [
-        { id: "breakfast", label: "Today (breakfast)", onPick: () => (setSession((s) => ({ ...s, relTime: "today_breakfast", step: "rel_role" })), push("app", "Your role in it?")) },
-        { id: "phone", label: "Today (phone/text)", onPick: () => (setSession((s) => ({ ...s, relTime: "today_phone", step: "rel_role" })), push("app", "Your role in it?")) },
-        { id: "yesterday", label: "Yesterday", onPick: () => (setSession((s) => ({ ...s, relTime: "yesterday", step: "rel_role" })), push("app", "Your role in it?")) },
-        { id: "week", label: "This week", onPick: () => (setSession((s) => ({ ...s, relTime: "this_week", step: "rel_role" })), push("app", "Your role in it?")) },
-        { id: "other", label: "Other", onPick: () => (setSession((s) => ({ ...s, relTime: "other", step: "rel_role" })), push("app", "Your role in it?")) },
+        {
+          id: "breakfast",
+          label: "Today (breakfast)",
+          onPick: () => {
+            setSession((s) => ({ ...s, relTime: "today_breakfast", step: "rel_role" }));
+            push("app", "Your role in it?");
+          },
+        },
+        {
+          id: "phone",
+          label: "Today (phone/text)",
+          onPick: () => {
+            setSession((s) => ({ ...s, relTime: "today_phone", step: "rel_role" }));
+            push("app", "Your role in it?");
+          },
+        },
+        {
+          id: "yesterday",
+          label: "Yesterday",
+          onPick: () => {
+            setSession((s) => ({ ...s, relTime: "yesterday", step: "rel_role" }));
+            push("app", "Your role in it?");
+          },
+        },
+        {
+          id: "week",
+          label: "This week",
+          onPick: () => {
+            setSession((s) => ({ ...s, relTime: "this_week", step: "rel_role" }));
+            push("app", "Your role in it?");
+          },
+        },
+        {
+          id: "other",
+          label: "Other",
+          onPick: () => {
+            setSession((s) => ({ ...s, relTime: "other", step: "rel_role" }));
+            push("app", "Your role in it?");
+          },
+        },
       ];
     }
 
     if (session.step === "rel_role") {
+      const goCost = (r: Session["relRole"]) => {
+        setSession((s) => ({ ...s, relRole: r, step: "rel_cost" }));
+        push("app", "If nothing changes, what worries you most?");
+      };
       choices = [
-        { id: "witness", label: "I witnessed it", onPick: () => (setSession((s) => ({ ...s, relRole: "witness", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "involved", label: "I was involved", onPick: () => (setSession((s) => ({ ...s, relRole: "involved", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "fix", label: "They want me to fix it", onPick: () => (setSession((s) => ({ ...s, relRole: "asked_to_fix", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "unclear", label: "Not sure", onPick: () => (setSession((s) => ({ ...s, relRole: "unclear", step: "rel_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "witness", label: "I witnessed it", onPick: () => goCost("witness") },
+        { id: "involved", label: "I was involved", onPick: () => goCost("involved") },
+        { id: "fix", label: "They want me to fix it", onPick: () => goCost("asked_to_fix") },
+        { id: "unclear", label: "Not sure", onPick: () => goCost("unclear") },
       ];
     }
 
-    if (session.step === "rel_body_loc") choices = bodyLocChoices;
+    if (session.step === "rel_cost") choices = costChoices("rel_body_optional");
+    if (session.step === "rel_body_optional") choices = makeBodyLocChoices("basic");
 
     if (session.step === "rel_body_qual") {
       choices = bodyQualChoices("rel_goal", "What do you want most right now?");
@@ -945,11 +1268,46 @@ export default function Home() {
 
     if (session.step === "rel_goal") {
       choices = [
-        { id: "peace", label: "Peace", onPick: () => (setSession((s) => ({ ...s, goal: "peace", step: "rel_repeating" })), push("app", "Is this one-time or repeating?")) },
-        { id: "fairness", label: "Fairness", onPick: () => (setSession((s) => ({ ...s, goal: "fairness", step: "rel_repeating" })), push("app", "Is this one-time or repeating?")) },
-        { id: "respect", label: "Respect", onPick: () => (setSession((s) => ({ ...s, goal: "respect", step: "rel_repeating" })), push("app", "Is this one-time or repeating?")) },
-        { id: "safety", label: "Safety", onPick: () => (setSession((s) => ({ ...s, goal: "safety", step: "rel_repeating" })), push("app", "Is this one-time or repeating?")) },
-        { id: "clarity", label: "Clarity", onPick: () => (setSession((s) => ({ ...s, goal: "clarity", step: "rel_repeating" })), push("app", "Is this one-time or repeating?")) },
+        {
+          id: "peace",
+          label: "Peace",
+          onPick: () => {
+            setSession((s) => ({ ...s, goal: "peace", step: "rel_repeating" }));
+            push("app", "Is this one-time or repeating?");
+          },
+        },
+        {
+          id: "fairness",
+          label: "Fairness",
+          onPick: () => {
+            setSession((s) => ({ ...s, goal: "fairness", step: "rel_repeating" }));
+            push("app", "Is this one-time or repeating?");
+          },
+        },
+        {
+          id: "respect",
+          label: "Respect",
+          onPick: () => {
+            setSession((s) => ({ ...s, goal: "respect", step: "rel_repeating" }));
+            push("app", "Is this one-time or repeating?");
+          },
+        },
+        {
+          id: "safety",
+          label: "Safety",
+          onPick: () => {
+            setSession((s) => ({ ...s, goal: "safety", step: "rel_repeating" }));
+            push("app", "Is this one-time or repeating?");
+          },
+        },
+        {
+          id: "clarity",
+          label: "Clarity",
+          onPick: () => {
+            setSession((s) => ({ ...s, goal: "clarity", step: "rel_repeating" }));
+            push("app", "Is this one-time or repeating?");
+          },
+        },
       ];
     }
 
@@ -968,27 +1326,67 @@ export default function Home() {
     }
   }
 
-  // WORK FLOW
+  // ---------------- WORK FLOW ----------------
   if (session.flow === "work") {
     if (session.step === "work_scope") {
       choices = [
-        { id: "too_much", label: "Too much to do", onPick: () => (setSession((s) => ({ ...s, workScope: "too_much", step: "work_timing" })), push("app", "Is this about today, this week, or ongoing?")) },
-        { id: "conflict", label: "Conflict with someone", onPick: () => (setSession((s) => ({ ...s, workScope: "conflict", step: "work_timing" })), push("app", "Is this about today, this week, or ongoing?")) },
-        { id: "priorities", label: "Unclear priorities", onPick: () => (setSession((s) => ({ ...s, workScope: "unclear_priorities", step: "work_timing" })), push("app", "Is this about today, this week, or ongoing?")) },
-        { id: "avoidance", label: "Avoidance / motivation", onPick: () => (setSession((s) => ({ ...s, workScope: "avoidance", step: "work_timing" })), push("app", "Is this about today, this week, or ongoing?")) },
-        { id: "direction", label: "Job direction / next move", onPick: () => (setSession((s) => ({ ...s, workScope: "job_direction", step: "work_timing" })), push("app", "Is this about today, this week, or ongoing?")) },
+        {
+          id: "too_much",
+          label: "Too much to do",
+          onPick: () => {
+            setSession((s) => ({ ...s, workScope: "too_much", step: "work_timing" }));
+            push("app", "Is this about today, this week, or ongoing?");
+          },
+        },
+        {
+          id: "conflict",
+          label: "Conflict with someone",
+          onPick: () => {
+            setSession((s) => ({ ...s, workScope: "conflict", step: "work_timing" }));
+            push("app", "Is this about today, this week, or ongoing?");
+          },
+        },
+        {
+          id: "priorities",
+          label: "Unclear priorities",
+          onPick: () => {
+            setSession((s) => ({ ...s, workScope: "unclear_priorities", step: "work_timing" }));
+            push("app", "Is this about today, this week, or ongoing?");
+          },
+        },
+        {
+          id: "avoidance",
+          label: "Avoidance / motivation",
+          onPick: () => {
+            setSession((s) => ({ ...s, workScope: "avoidance", step: "work_timing" }));
+            push("app", "Is this about today, this week, or ongoing?");
+          },
+        },
+        {
+          id: "direction",
+          label: "Job direction / next move",
+          onPick: () => {
+            setSession((s) => ({ ...s, workScope: "job_direction", step: "work_timing" }));
+            push("app", "Is this about today, this week, or ongoing?");
+          },
+        },
       ];
     }
 
     if (session.step === "work_timing") {
+      const goCost = (t: WorkTiming) => {
+        setSession((s) => ({ ...s, workTiming: t, step: "work_cost" }));
+        push("app", "If nothing changes, what worries you most?");
+      };
       choices = [
-        { id: "today", label: "Today", onPick: () => (setSession((s) => ({ ...s, workTiming: "today", step: "work_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "week", label: "This week", onPick: () => (setSession((s) => ({ ...s, workTiming: "this_week", step: "work_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "ongoing", label: "Ongoing", onPick: () => (setSession((s) => ({ ...s, workTiming: "ongoing", step: "work_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "today", label: "Today", onPick: () => goCost("today") },
+        { id: "week", label: "This week", onPick: () => goCost("this_week") },
+        { id: "ongoing", label: "Ongoing", onPick: () => goCost("ongoing") },
       ];
     }
 
-    if (session.step === "work_body_loc") choices = bodyLocChoices;
+    if (session.step === "work_cost") choices = costChoices("work_body_optional");
+    if (session.step === "work_body_optional") choices = makeBodyLocChoices("basic");
 
     if (session.step === "work_body_qual") {
       choices = bodyQualChoices("work_goal", "What do you want most right now?");
@@ -1012,27 +1410,67 @@ export default function Home() {
     }
   }
 
-  // MONEY FLOW
+  // ---------------- MONEY FLOW ----------------
   if (session.flow === "money") {
     if (session.step === "money_pressure") {
       choices = [
-        { id: "in", label: "Not enough coming in", onPick: () => (setSession((s) => ({ ...s, moneyPressure: "not_enough_in", step: "money_horizon" })), push("app", "Is this about right now, this month, or ongoing?")) },
-        { id: "out", label: "Too much going out", onPick: () => (setSession((s) => ({ ...s, moneyPressure: "too_much_out", step: "money_horizon" })), push("app", "Is this about right now, this month, or ongoing?")) },
-        { id: "fear", label: "Uncertainty / fear", onPick: () => (setSession((s) => ({ ...s, moneyPressure: "fear_uncertainty", step: "money_horizon" })), push("app", "Is this about right now, this month, or ongoing?")) },
-        { id: "avoid", label: "Decision I’m avoiding", onPick: () => (setSession((s) => ({ ...s, moneyPressure: "avoided_decision", step: "money_horizon" })), push("app", "Is this about right now, this month, or ongoing?")) },
-        { id: "conflict", label: "Conflict with someone", onPick: () => (setSession((s) => ({ ...s, moneyPressure: "conflict_money", step: "money_horizon" })), push("app", "Is this about right now, this month, or ongoing?")) },
+        {
+          id: "in",
+          label: "Not enough coming in",
+          onPick: () => {
+            setSession((s) => ({ ...s, moneyPressure: "not_enough_in", step: "money_horizon" }));
+            push("app", "Is this about right now, this month, or ongoing?");
+          },
+        },
+        {
+          id: "out",
+          label: "Too much going out",
+          onPick: () => {
+            setSession((s) => ({ ...s, moneyPressure: "too_much_out", step: "money_horizon" }));
+            push("app", "Is this about right now, this month, or ongoing?");
+          },
+        },
+        {
+          id: "fear",
+          label: "Uncertainty / fear",
+          onPick: () => {
+            setSession((s) => ({ ...s, moneyPressure: "fear_uncertainty", step: "money_horizon" }));
+            push("app", "Is this about right now, this month, or ongoing?");
+          },
+        },
+        {
+          id: "avoid",
+          label: "Decision I’m avoiding",
+          onPick: () => {
+            setSession((s) => ({ ...s, moneyPressure: "avoided_decision", step: "money_horizon" }));
+            push("app", "Is this about right now, this month, or ongoing?");
+          },
+        },
+        {
+          id: "conflict",
+          label: "Conflict with someone",
+          onPick: () => {
+            setSession((s) => ({ ...s, moneyPressure: "conflict_money", step: "money_horizon" }));
+            push("app", "Is this about right now, this month, or ongoing?");
+          },
+        },
       ];
     }
 
     if (session.step === "money_horizon") {
+      const goCost = (h: MoneyHorizon) => {
+        setSession((s) => ({ ...s, moneyHorizon: h, step: "money_cost" }));
+        push("app", "If nothing changes, what worries you most?");
+      };
       choices = [
-        { id: "now", label: "Right now", onPick: () => (setSession((s) => ({ ...s, moneyHorizon: "right_now", step: "money_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "month", label: "This month", onPick: () => (setSession((s) => ({ ...s, moneyHorizon: "this_month", step: "money_body_loc" })), push("app", "Body check: where do you feel it most?")) },
-        { id: "ongoing", label: "Ongoing pattern", onPick: () => (setSession((s) => ({ ...s, moneyHorizon: "ongoing", step: "money_body_loc" })), push("app", "Body check: where do you feel it most?")) },
+        { id: "now", label: "Right now", onPick: () => goCost("right_now") },
+        { id: "month", label: "This month", onPick: () => goCost("this_month") },
+        { id: "ongoing", label: "Ongoing pattern", onPick: () => goCost("ongoing") },
       ];
     }
 
-    if (session.step === "money_body_loc") choices = bodyLocChoices;
+    if (session.step === "money_cost") choices = costChoices("money_body_optional");
+    if (session.step === "money_body_optional") choices = makeBodyLocChoices("basic");
 
     if (session.step === "money_body_qual") {
       choices = bodyQualChoices("money_goal", "What matters most right now?");
@@ -1056,27 +1494,67 @@ export default function Home() {
     }
   }
 
-  // HEALTH FLOW
+  // ---------------- HEALTH FLOW ----------------
   if (session.flow === "health") {
     if (session.step === "health_issue") {
       choices = [
-        { id: "energy", label: "Energy / fatigue", onPick: () => (setSession((s) => ({ ...s, healthIssue: "energy_fatigue", step: "health_pattern" })), push("app", "Is it new, ongoing, or comes and goes?")) },
-        { id: "pain", label: "Pain / discomfort", onPick: () => (setSession((s) => ({ ...s, healthIssue: "pain_discomfort", step: "health_pattern" })), push("app", "Is it new, ongoing, or comes and goes?")) },
-        { id: "stress", label: "Stress / anxiety", onPick: () => (setSession((s) => ({ ...s, healthIssue: "stress_anxiety", step: "health_pattern" })), push("app", "Is it new, ongoing, or comes and goes?")) },
-        { id: "sleep", label: "Sleep", onPick: () => (setSession((s) => ({ ...s, healthIssue: "sleep", step: "health_pattern" })), push("app", "Is it new, ongoing, or comes and goes?")) },
-        { id: "habit", label: "Habit I can’t keep", onPick: () => (setSession((s) => ({ ...s, healthIssue: "habit", step: "health_pattern" })), push("app", "Is it new, ongoing, or comes and goes?")) },
+        {
+          id: "energy",
+          label: "Energy / fatigue",
+          onPick: () => {
+            setSession((s) => ({ ...s, healthIssue: "energy_fatigue", step: "health_pattern" }));
+            push("app", "Is it new, ongoing, or comes and goes?");
+          },
+        },
+        {
+          id: "pain",
+          label: "Pain / discomfort",
+          onPick: () => {
+            setSession((s) => ({ ...s, healthIssue: "pain_discomfort", step: "health_pattern" }));
+            push("app", "Is it new, ongoing, or comes and goes?");
+          },
+        },
+        {
+          id: "stress",
+          label: "Stress / anxiety",
+          onPick: () => {
+            setSession((s) => ({ ...s, healthIssue: "stress_anxiety", step: "health_pattern" }));
+            push("app", "Is it new, ongoing, or comes and goes?");
+          },
+        },
+        {
+          id: "sleep",
+          label: "Sleep",
+          onPick: () => {
+            setSession((s) => ({ ...s, healthIssue: "sleep", step: "health_pattern" }));
+            push("app", "Is it new, ongoing, or comes and goes?");
+          },
+        },
+        {
+          id: "habit",
+          label: "Habit I can’t keep",
+          onPick: () => {
+            setSession((s) => ({ ...s, healthIssue: "habit", step: "health_pattern" }));
+            push("app", "Is it new, ongoing, or comes and goes?");
+          },
+        },
       ];
     }
 
     if (session.step === "health_pattern") {
+      const goCost = (p: HealthPattern) => {
+        setSession((s) => ({ ...s, healthPattern: p, step: "health_cost" }));
+        push("app", "If nothing changes, what worries you most?");
+      };
       choices = [
-        { id: "new", label: "New", onPick: () => (setSession((s) => ({ ...s, healthPattern: "new", step: "health_body_loc" })), push("app", "Where do you feel it most?")) },
-        { id: "ongoing", label: "Ongoing", onPick: () => (setSession((s) => ({ ...s, healthPattern: "ongoing", step: "health_body_loc" })), push("app", "Where do you feel it most?")) },
-        { id: "comes", label: "Comes and goes", onPick: () => (setSession((s) => ({ ...s, healthPattern: "comes_goes", step: "health_body_loc" })), push("app", "Where do you feel it most?")) },
+        { id: "new", label: "New", onPick: () => goCost("new") },
+        { id: "ongoing", label: "Ongoing", onPick: () => goCost("ongoing") },
+        { id: "comes", label: "Comes and goes", onPick: () => goCost("comes_goes") },
       ];
     }
 
-    if (session.step === "health_body_loc") choices = healthBodyLocChoices;
+    if (session.step === "health_cost") choices = costChoices("health_body_optional");
+    if (session.step === "health_body_optional") choices = makeBodyLocChoices("health");
 
     if (session.step === "health_body_qual") {
       choices = bodyQualChoices("health_goal", "What matters most right now?");
@@ -1110,7 +1588,9 @@ export default function Home() {
       }}
     >
       <h1 style={{ marginBottom: 6 }}>Way of the Feather</h1>
-      <p style={{ marginTop: 0, color: "#444" }}>Plain language. Real life. Costs + balance. No commands.</p>
+      <p style={{ marginTop: 0, color: "#444" }}>
+        Plain language. Real life. Costs + balance. No commands.
+      </p>
 
       <div
         style={{
@@ -1157,7 +1637,7 @@ export default function Home() {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder='Type your question, tap Send, then use the buttons. Example: “Work is overwhelming.”'
+          placeholder='Type your question, tap Send, then use the buttons. Example: “My friend is ignoring me at school.”'
           rows={3}
           style={{
             flex: 1,
@@ -1168,27 +1648,7 @@ export default function Home() {
           }}
         />
         <button
-          onClick={() => {
-            const text = input.trim();
-            if (!text) return;
-            push("user", text);
-            setInput("");
-
-            // mid-flow new question -> restart
-            if (session.flow !== "none" && looksLikeNewQuestion(text)) {
-              push("app", "New question noticed. Starting fresh.");
-              resetSession();
-              beginSession(text);
-              return;
-            }
-
-            if (session.flow === "none") {
-              beginSession(text);
-              return;
-            }
-
-            push("app", "Got it. (Detail noted.) Use the buttons below to continue.");
-          }}
+          onClick={send}
           disabled={!canSend}
           style={{
             width: 110,
